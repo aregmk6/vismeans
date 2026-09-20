@@ -5,52 +5,61 @@
 #include <raymath.h>
 #include <stdio.h>
 
-#include "rcamera.h"
+#define WINDOW_WIDTH 1280
+#define WINDOW_HEIGHT 720
+#define RADIUS 0.2f
 
-#define FS                                                                     \
-    "/home/aregmk/MyStuff/git-stuff/raylib/examples/shaders/resources/"        \
-    "shaders/glsl330/lighting.fs"
-
-#define VS                                                                     \
-    "/home/aregmk/MyStuff/git-stuff/raylib/examples/shaders/resources/"        \
-    "shaders/glsl330/lighting.vs"
+static void handle_input(float* plane, bool* camera_flag, Camera* camera);
+static Camera initialization();
+static void loop(Camera camera);
 
 typedef struct {
-    Vector3* items;
+    Vector3 pos;
+    Color color;
+} Point;
+
+typedef struct {
+    Vector3 pos;
+    Color color;
+} Centroid;
+
+typedef struct {
+    Point* items;
     size_t count;
     size_t capacity;
-} Dots;
+} Points;
 
 int main(void)
 {
-    Dots ds           = {0};
-    Vector2 mouse_pos = {0};
-    Vector3 pos       = {0};
-    float depth_pos = 0, plane = 0, d = 0;
+    Camera camera = initialization();
+
+    loop(camera);
+
+    CloseWindow();
+
+    return 0;
+}
+
+static void loop(Camera camera)
+{
+    Points ds   = {0};
+    float plane = 0, d = 0;
     bool camera_flag = 0;
-
-    InitWindow(1280, 720, "Dots");
-
-    Camera camera     = {0};
-    camera.position   = (Vector3){0.0f, 0.0f, 5.0f};
-    camera.target     = (Vector3){0.0f, 0.0f, 0.0f};
-    camera.up         = (Vector3){0.0f, 1.0f, 0.0f};
-    camera.fovy       = 60.0f;
-    camera.projection = CAMERA_PERSPECTIVE;
-
-    SetTargetFPS(60);
 
     while (!WindowShouldClose()) {
         if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
 
-            // draw only on the Z = 0 plane.
-            // d = (P0 - l0)*n / l*n
-            // where:
-            // P0 = (0, 0, z)
-            // l0 = ray.position
-            // l = ray.direction
-            // n = (0,0,1)
+            /*
+             *  draw only on the Z = 0 plane.
+             *  d = (P0 - l0)*n / l*n
+             *  where:
+             *  P0 = (0, 0, z)
+             *  l0 = ray.position
+             *  l = ray.direction
+             *  n = (0,0,1)
+             */
 
+            Point p = {0};
             Ray ray = {camera.position, Vector3Normalize(Vector3Subtract(
                                             camera.target, camera.position))};
 
@@ -58,66 +67,76 @@ int main(void)
                 d = (plane - ray.position.z) / ray.direction.z;
             }
 
-            pos = (Vector3){
+            p.pos = (Vector3){
                 ray.position.x + ray.direction.x * d,
                 ray.position.y + ray.direction.y * d,
                 plane,
             };
+            p.color = RED;
 
-            // printf("%f, %f, %f\n", pos.x, pos.y, pos.z);
-
-            da_append(&ds, pos);
+            da_append(&ds, p);
         }
 
-        if (IsKeyDown(KEY_P)) {
-            plane -= GetFrameTime() * 5.0f;
-        }
-
-        if (IsKeyDown(KEY_O)) {
-            plane += GetFrameTime() * 5.0f;
-        }
-
-        if (IsKeyPressed(KEY_E)) {
-            if (IsCursorHidden()) {
-                EnableCursor();
-            } else {
-                DisableCursor();
-            }
-        }
-
-        if (IsKeyPressed(KEY_Q)) {
-            if (camera.projection == CAMERA_ORTHOGRAPHIC) {
-                camera.projection = CAMERA_PERSPECTIVE;
-            } else {
-                camera.projection = CAMERA_ORTHOGRAPHIC;
-            }
-        }
-
-        if (IsKeyPressed(KEY_R)) {
-            if (camera_flag)
-                camera_flag = 0;
-            else
-                camera_flag = 1;
-        }
-
-        if (camera_flag) {
-            UpdateCamera(&camera, CAMERA_FREE);
-        }
+        handle_input(&plane, &camera_flag, &camera);
 
         BeginDrawing();
-        ClearBackground(BLACK);
+
+        ClearBackground(BLUE);
 
         BeginMode3D(camera);
 
-        nob_da_foreach(Vector3, dot, &ds)
+        nob_da_foreach(Point, p, &ds)
         {
-            DrawSphere(*dot, 0.2f, RED);
+            DrawSphere(p->pos, RADIUS, p->color);
         }
 
         EndMode3D();
 
         EndDrawing();
     }
-    CloseWindow();
-    return 0;
+}
+
+static Camera initialization()
+{
+    InitWindow(WINDOW_WIDTH, WINDOW_HEIGHT, "Dots");
+
+    SetTargetFPS(60);
+
+    return (Camera){
+        (Vector3){0.0f, 0.0f, 5.0f}, //
+        (Vector3){0.0f, 0.0f, 0.0f}, //
+        (Vector3){0.0f, 1.0f, 0.0f}, //
+        60.0f,
+        CAMERA_PERSPECTIVE,
+    };
+}
+
+static void handle_input(float* plane, bool* camera_flag, Camera* camera)
+{
+    if (IsKeyDown(KEY_E)) {
+        *plane -= GetFrameTime() * 5.0f;
+    }
+
+    if (IsKeyDown(KEY_Q)) {
+        *plane += GetFrameTime() * 5.0f;
+    }
+
+    if (IsKeyPressed(KEY_F)) {
+        if (IsCursorHidden()) {
+            EnableCursor();
+        } else {
+            DisableCursor();
+        }
+    }
+
+    if (IsKeyPressed(KEY_R)) {
+        if (camera_flag)
+            *camera_flag = 0;
+        else
+            *camera_flag = 1;
+    }
+
+    if (camera_flag) {
+        UpdateCamera(camera, CAMERA_FREE);
+    }
 }
