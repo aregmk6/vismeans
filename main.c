@@ -42,9 +42,13 @@ static Camera initialization()
 }
 
 static void handle_input(float* plane, Color* color, bool* camera_flag,
-                         bool* point_flag, Camera* camera)
+                         bool* point_flag, Camera* camera, size_t* cur_cent)
 {
     static bool used_centroids[MAX_CENTROIDS] = {0};
+    static Color color_picker[]               = {
+        GRAY,  YELLOW, GOLD,     ORANGE, PINK,  MAROON,
+        GREEN, LIME,   DARKBLUE, VIOLET, BEIGE, BROWN,
+    };
 
     if (IsKeyDown(KEY_E)) {
         *plane -= GetFrameTime() * 5.0f;
@@ -69,18 +73,20 @@ static void handle_input(float* plane, Color* color, bool* camera_flag,
             *camera_flag = 1;
     }
 
-    // centroid
-    if (!used_centroids[0] && IsKeyPressed(KEY_ONE)) {
-        *point_flag       = 1;
-        *color            = PINK;
-        used_centroids[0] = true;
+    int cur_cent_int = (int)*cur_cent;
+    cur_cent_int += (int)GetMouseWheelMove();
+    if (cur_cent_int <= 0) {
+        cur_cent_int = 0;
+    } else if (cur_cent_int >= MAX_CENTROIDS - 1) {
+        cur_cent_int = MAX_CENTROIDS - 1;
     }
+    *cur_cent = cur_cent_int;
 
     // centroid
-    if (!used_centroids[1] && IsKeyPressed(KEY_TWO)) {
-        *point_flag       = 1;
-        *color            = YELLOW;
-        used_centroids[1] = true;
+    if (!used_centroids[*cur_cent] && IsKeyPressed(KEY_ONE)) {
+        *point_flag               = 1;
+        *color                    = color_picker[*cur_cent];
+        used_centroids[*cur_cent] = true;
     }
 
     if (*camera_flag) {
@@ -90,7 +96,7 @@ static void handle_input(float* plane, Color* color, bool* camera_flag,
 
 void kmeans(Points* normal_points, Points* centroids)
 {
-    if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) {
+    if (IsMouseButtonDown(MOUSE_RIGHT_BUTTON)) {
         // calculate one k-means iteration
         struct {
             Vector3 pos;
@@ -137,8 +143,10 @@ void kmeans(Points* normal_points, Points* centroids)
         nob_da_foreach(Point, c, centroids)
         {
             size_t index = c - centroids->items;
-            c->pos       = Vector3Scale(new_cents[index].pos,
-                                        1 / (float)new_cents[index].size);
+            if (new_cents[index].size != 0) {
+                c->pos = Vector3Scale(new_cents[index].pos,
+                                      1 / (float)new_cents[index].size);
+            }
 
             printf("centroid %zu: %f, %f, %f\n", index, c->pos.x, c->pos.y,
                    c->pos.z);
@@ -148,6 +156,7 @@ void kmeans(Points* normal_points, Points* centroids)
 
 static void loop(Camera camera)
 {
+
     Points normal_points = {0};
     Points centroids     = {0};
 
@@ -155,9 +164,10 @@ static void loop(Camera camera)
     bool camera_flag = 1; // one = camera on
     bool point_flag  = 0; // zero = normal points
     Color color      = RED;
+    size_t cur_cent  = 0;
 
     while (!WindowShouldClose()) {
-        if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+        if (IsMouseButtonDown(MOUSE_LEFT_BUTTON)) {
 
             /*
              *  draw only on the Z = 0 plane.
@@ -194,13 +204,14 @@ static void loop(Camera camera)
             color      = RED;
         }
 
-        handle_input(&plane, &color, &camera_flag, &point_flag, &camera);
+        handle_input(&plane, &color, &camera_flag, &point_flag, &camera,
+                     &cur_cent);
 
         kmeans(&normal_points, &centroids);
 
         BeginDrawing();
 
-        ClearBackground(BLUE);
+        ClearBackground(BLACK);
 
         BeginMode3D(camera);
 
@@ -215,6 +226,9 @@ static void loop(Camera camera)
         }
 
         EndMode3D();
+
+        DrawText(TextFormat("Current Centroid: %03i", cur_cent), 10, 10, 20,
+                 RED);
 
         EndDrawing();
     }
